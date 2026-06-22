@@ -1,0 +1,263 @@
+/* styles/markdown.css */
+
+/* Markdown Content Styles */
+.markdown-content {
+  @apply prose prose-lg prose-blue max-w-none;
+}
+
+/* Headings */
+.markdown-content h1 {
+  @apply text-4xl font-bold mt-8 mb-4 pb-2 border-b border-gray-200;
+}
+
+.markdown-content h2 {
+  @apply text-3xl font-semibold mt-8 mb-3;
+}
+
+.markdown-content h3 {
+  @apply text-2xl font-semibold mt-6 mb-3;
+}
+
+.markdown-content h4 {
+  @apply text-xl font-semibold mt-4 mb-2;
+}
+
+.markdown-content h5 {
+  @apply text-lg font-semibold mt-4 mb-2;
+}
+
+.markdown-content h6 {
+  @apply text-base font-semibold mt-4 mb-2 text-gray-600;
+}
+
+/* Paragraphs */
+.markdown-content p {
+  @apply mb-4 leading-relaxed;
+}
+
+/* Links */
+.markdown-content a {
+  @apply text-blue-600 hover:text-blue-700 underline transition-colors;
+}
+
+/* Lists */
+.markdown-content ul {
+  @apply list-disc pl-6 mb-4 space-y-1;
+}
+
+.markdown-content ol {
+  @apply list-decimal pl-6 mb-4 space-y-1;
+}
+
+.markdown-content li {
+  @apply mb-1;
+}
+
+.markdown-content li > p {
+  @apply mb-0;
+}
+
+/* Blockquotes */
+.markdown-content blockquote {
+  @apply border-l-4 border-blue-500 bg-blue-50 p-4 rounded-r-lg mb-4;
+}
+
+.markdown-content blockquote p {
+  @apply mb-0;
+}
+
+/* Code */
+.markdown-content code {
+  @apply bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.markdown-content pre {
+  @apply bg-gray-900 text-gray-100 p-4 rounded-lg mb-4 overflow-x-auto;
+}
+
+.markdown-content pre code {
+  @apply bg-transparent text-gray-100 p-0;
+}
+
+/* Tables */
+.markdown-content table {
+  @apply w-full mb-4 border-collapse;
+}
+
+.markdown-content th {
+  @apply bg-gray-100 border border-gray-300 px-4 py-2 text-left font-semibold;
+}
+
+.markdown-content td {
+  @apply border border-gray-300 px-4 py-2;
+}
+
+/* Images */
+.markdown-content img {
+  @apply rounded-lg shadow-md max-w-full h-auto my-4;
+}
+
+/* Horizontal Rule */
+.markdown-content hr {
+  @apply my-8 border-t border-gray-200;
+}
+
+/* Footnotes */
+.markdown-content .footnote-ref {
+  @apply text-sm align-super;
+}
+
+.markdown-content .footnotes {
+  @apply mt-8 pt-4 border-t border-gray-200;
+}
+
+/* Task Lists */
+.markdown-content input[type="checkbox"] {
+  @apply mr-2;
+}
+
+/* Definition Lists */
+.markdown-content dt {
+  @apply font-semibold mt-4;
+}
+
+.markdown-content dd {
+  @apply ml-4 mb-2;
+}
+
+/* Abbreviations */
+.markdown-content abbr {
+  @apply cursor-help border-b border-dotted border-gray-400;
+}
+
+/* Keyboard Shortcuts */
+.markdown-content kbd {
+  @apply bg-gray-100 border border-gray-300 rounded px-1.5 py-0.5 text-sm font-mono;
+}
+
+/* Highlights */
+.markdown-content mark {
+  @apply bg-yellow-200 px-0.5 rounded;
+}
+
+/* Editor Specific Styles */
+.ProseMirror {
+  @apply outline-none min-h-[500px];
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  @apply text-gray-400;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror-focused {
+  @apply outline-none;
+}
+
+/* Toolbar Button Active State */
+.tiptap-button-active {
+  @apply bg-gray-200 text-gray-900;
+}
+
+/* Code Block Wrapper */
+.code-block-wrapper {
+  @apply relative;
+}
+
+.code-block-wrapper button {
+  @apply absolute top-2 right-2 bg-gray-700 text-white px-2 py-1 rounded text-xs;
+}
+
+/* Resize Handles for Images */
+.resize-handle {
+  @apply absolute bottom-0 right-0 w-3 h-3 bg-blue-500 cursor-se-resize;
+}
+
+/* Drag Handle */
+.drag-handle {
+  @apply absolute left-0 top-0 w-4 h-4 cursor-move;
+}
+
+/* Loading Animation for AI Generation */
+.ai-generating {
+  @apply relative overflow-hidden;
+}
+
+.ai-generating::after {
+  content: '';
+  @apply absolute inset-0 bg-gradient-to-r from-transparent via-blue-200 to-transparent;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Table of Contents */
+.table-of-contents {
+  @apply sticky top-24;
+}
+
+.table-of-contents a {
+  @apply block py-1 text-sm text-gray-600 hover:text-blue-600 transition-colors;
+}
+
+.table-of-contents a.active {
+  @apply text-blue-600 font-medium;
+}
+
+/* Code Copy Button */
+.code-copy-button {
+  @apply absolute top-2 right-2 bg-gray-700 text-white px-2 py-1 rounded text-xs hover:bg-gray-600 transition-colors;
+}
+
+/* Responsive Tables */
+@media (max-width: 640px) {
+  .markdown-content table {
+    @apply block overflow-x-auto;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .markdown-content {
+    @apply text-gray-200;
+  }
+  
+  .markdown-content h1,
+  .markdown-content h2,
+  .markdown-content h3,
+  .markdown-content h4,
+  .markdown-content h5,
+  .markdown-content h6 {
+    @apply text-white;
+  }
+  
+  .markdown-content code {
+    @apply bg-gray-800 text-gray-200;
+  }
+  
+  .markdown-content pre {
+    @apply bg-gray-800;
+  }
+  
+  .markdown-content blockquote {
+    @apply bg-gray-800;
+  }
+  
+  .markdown-content th {
+    @apply bg-gray-800 border-gray-700;
+  }
+  
+  .markdown-content td {
+    @apply border-gray-700;
+  }
+}
