@@ -2,10 +2,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Post from "@/models/Post";
-import { verifyToken } from "@/lib/auth";
-import { getToken } from "@/lib/cookies";
+import { verifyToken, verifyRefreshToken } from "@/lib/auth";
+import { getAuthTokens } from "@/lib/cookies";
 
-// GET - Fetch posts (Private for logged-in user, Public for non-logged-in)
+export const dynamic = 'force-dynamic';
+
+// GET - Fetch posts (Private for logged-in user dashboard, Public for home feed)
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
@@ -17,33 +19,47 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category");
     const tag = searchParams.get("tag");
     const search = searchParams.get("search");
-    const author = searchParams.get("author");
+    const authorParam = searchParams.get("author");
 
     const query: any = {};
     
-    const token = await getToken();
-    const user = token ? await verifyToken(token) : null;
+    // 🔑 Securely fetch access and refresh tokens from system cookies
+    const { accessToken, refreshToken } = await getAuthTokens();
+    
+    let user: any = null;
+    if (accessToken) {
+      user = await verifyToken(accessToken);
+    } 
+    
+    // Fallback: Agar access token expire ho chuka ho, to refresh token validation check karein
+    if (!user && refreshToken) {
+      const refreshPayload = await verifyRefreshToken(refreshToken);
+      if (refreshPayload) {
+        user = refreshPayload;
+      }
+    }
     
     if (!user) {
-      // 1. Agar koi bhi user login nahi hai, to sirf publicly published posts dikhao
+      // 1. Guest User: Sirf publicly published posts nazar aayengi
       query.status = "published";
+      if (authorParam) query.author = authorParam;
     } else {
-      // 2. 🎯 THE FIX: Agar user logged in hai, to usey sirf USKI APNI posts dikhao
+      // 2. Logged-in User: Strict isolation logic enforce karein
       const loggedInUserId = user.userId || user.id || user._id;
+      
       if (loggedInUserId) {
+        // Hamein har haal mein logged-in user ka data dikhana hai dashboard par
         query.author = loggedInUserId;
       }
       
-      // Agar usne dashboard par specific status filter lagaya ho (like draft/published)
       if (status) {
         query.status = status;
       }
     }
 
-    // URL query filters (Agar frontend se explicitly pass kiye gaye hon)
+    // Common global URL parameters filtering
     if (category) query.categories = category;
     if (tag) query.tags = tag;
-    if (author) query.author = author; // Override agar specific author search karna ho
     
     if (search) {
       query.$or = [
@@ -90,17 +106,18 @@ export async function POST(req: NextRequest) {
     console.log("=== [1] POST API HIT STARTED ===");
     await connectDB();
     
-    const token = await getToken();
-    if (!token) {
+    // Yahan hum strict cookie extraction process follow kar rahe hain
+    const { accessToken } = await getAuthTokens();
+    if (!accessToken) {
       return NextResponse.json(
-        { success: false, error: "Auth Error: No cookies/token found in request" },
+        { success: false, error: "Auth Error: No access token found in cookies" },
         { status: 401 }
       );
     }
 
     let user: any = null;
     try {
-      user = await verifyToken(token);
+      user = await verifyToken(accessToken);
       console.log("=== [4] DECODED USER OBJECT ==:", user);
     } catch (tokenErr: any) {
       console.error("=== Token Verification Failed ==:", tokenErr);
