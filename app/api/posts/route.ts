@@ -5,7 +5,7 @@ import Post from "@/models/Post";
 import { verifyToken } from "@/lib/auth";
 import { getToken } from "@/lib/cookies";
 
-// GET - Fetch all posts (public)
+// GET - Fetch posts (Private for logged-in user, Public for non-logged-in)
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
@@ -25,14 +25,25 @@ export async function GET(req: NextRequest) {
     const user = token ? await verifyToken(token) : null;
     
     if (!user) {
+      // 1. Agar koi bhi user login nahi hai, to sirf publicly published posts dikhao
       query.status = "published";
-    } else if (status) {
-      query.status = status;
+    } else {
+      // 2. 🎯 THE FIX: Agar user logged in hai, to usey sirf USKI APNI posts dikhao
+      const loggedInUserId = user.userId || user.id || user._id;
+      if (loggedInUserId) {
+        query.author = loggedInUserId;
+      }
+      
+      // Agar usne dashboard par specific status filter lagaya ho (like draft/published)
+      if (status) {
+        query.status = status;
+      }
     }
 
+    // URL query filters (Agar frontend se explicitly pass kiye gaye hon)
     if (category) query.categories = category;
     if (tag) query.tags = tag;
-    if (author) query.author = author;
+    if (author) query.author = author; // Override agar specific author search karna ho
     
     if (search) {
       query.$or = [
@@ -131,9 +142,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 🔑 THE BACKEND PROTECTION CHECK:
-    // Agar body mein explicitly `aiGenerated` true ho ya metadata bhej rahe ho tabhi true hoga,
-    // manually likhi hui generic post hamesha false save hogi.
     const cleanAiGeneratedFlag = body.aiGenerated === true || !!body.aiPrompt || !!body.aiModel;
 
     try {
@@ -145,7 +153,7 @@ export async function POST(req: NextRequest) {
         status: body.status || "published",
         tags: body.tags || [],
         categories: body.categories || [],
-        aiGenerated: cleanAiGeneratedFlag, // 👈 Strict evaluation dynamic flag apply ho gaya!
+        aiGenerated: cleanAiGeneratedFlag,
         aiPrompt: body.aiPrompt || undefined,
         aiModel: body.aiModel || undefined,
         aiSettings: body.aiSettings || undefined,
