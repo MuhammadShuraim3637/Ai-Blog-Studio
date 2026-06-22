@@ -1,4 +1,3 @@
-// app/layout.tsx
 import type { Metadata } from 'next';
 import { Inter, Poppins } from 'next/font/google';
 import './globals.css';
@@ -16,6 +15,8 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
+  // 🔑 FIX: Vercel Warning khatam karne ke liye metadataBase add kiya
+  metadataBase: new URL('https://ai-blog-studio-wequ-40m3fzefv-shuraim.vercel.app'),
   title: 'AI Blog Studio - Create Amazing Content with AI',
   description: 'Generate high-quality, SEO-optimized blog posts using advanced AI technology. Perfect for bloggers, content creators, and businesses.',
   keywords: 'AI blog writer, content generation, SEO optimization, blog automation, AI content creator',
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'AI Blog Studio - Create Amazing Content with AI',
     description: 'Generate high-quality, SEO-optimized blog posts using advanced AI technology',
-    url: 'https://aiblogstudio.com',
+    url: 'https://ai-blog-studio-wequ-40m3fzefv-shuraim.vercel.app',
     siteName: 'AI Blog Studio',
     images: [
       {
