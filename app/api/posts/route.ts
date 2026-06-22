@@ -4,6 +4,7 @@ import { connectDB } from "@/lib/db";
 import Post from "@/models/Post";
 import { verifyToken, verifyRefreshToken } from "@/lib/auth";
 import { getAuthTokens } from "@/lib/cookies";
+import mongoose from "mongoose"; // 🔑 Mongoose explicit import for casting type validation
 
 export const dynamic = 'force-dynamic';
 
@@ -42,14 +43,21 @@ export async function GET(req: NextRequest) {
     if (!user) {
       // 1. Guest User: Sirf publicly published posts nazar aayengi
       query.status = "published";
-      if (authorParam) query.author = authorParam;
+      if (authorParam) {
+        try {
+          query.author = new mongoose.Types.ObjectId(authorParam);
+        } catch (e) {
+          query.author = authorParam;
+        }
+      }
     } else {
       // 2. Logged-in User: Strict isolation logic enforce karein
       const loggedInUserId = user.userId || user.id || user._id;
       
       if (loggedInUserId) {
-        // Hamein har haal mein logged-in user ka data dikhana hai dashboard par
-        query.author = loggedInUserId;
+        // 🔑 THE ABSOLUTE CRITICAL FIX: String ID ko explicitly Mongoose ObjectId mein convert kiya
+        // Taake MongoDB schema structure ke mutabiq exact document link match ho ske.
+        query.author = new mongoose.Types.ObjectId(loggedInUserId);
       }
       
       if (status) {
