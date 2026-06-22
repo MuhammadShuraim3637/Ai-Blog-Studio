@@ -1,4 +1,3 @@
-// components/ai/GenerateForm.tsx
 'use client';
 
 import { useState } from 'react';
@@ -15,7 +14,8 @@ interface GenerateFormProps {
 }
 
 export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }: GenerateFormProps) {
-  const { state, generatePost, reset } = useGenerateBlog();
+  // 🎯 THE FIX: useGenerateBlog hook se 'isGenerating' ko directly nikal liya hai
+  const { state, generatePost, reset, isGenerating } = useGenerateBlog();
   const [prompt, setPrompt] = useState(initialPrompt);
   const [includeImage, setIncludeImage] = useState(false);
   const [tone, setTone] = useState<'professional' | 'casual' | 'humorous' | 'educational'>('professional');
@@ -61,25 +61,20 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
     console.log("🔍 [GenerateForm] Raw hook result:", result);
 
     if (result) {
-      // 🔑 Super Flexible Parsing: Jo bhi valid object mile nikaal lo
       let cleanPostData = null;
 
       if (result.data && typeof result.data === 'object') {
         cleanPostData = result.data;
       } else if (result.content) {
-        // Agar dynamic mapping me direct field content ho
         cleanPostData = result;
       } else if (result.title) {
-        // Agar wrapper ho hi na, direct data ho
         cleanPostData = result;
       } else {
-        // Fallback: Agar stringified format ya unpredictable response ho
         cleanPostData = result;
       }
       
       console.log("🎯 [GenerateForm] Parsed Clean Data:", cleanPostData);
 
-      // Check karein ke kya title ya content nikal paaya hai
       if (cleanPostData && (cleanPostData.title || cleanPostData.content)) {
         setGeneratedData(cleanPostData);
         if (onGenerated) {
@@ -87,7 +82,6 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
         }
       } else {
         console.error("❌ Data structure mismatched fields:", cleanPostData);
-        // Agar structure bilkul hi khali ho tabhi error state handle ho
         alert("AI responded, but fields (title/content) are missing. Check browser console.");
       }
     }
@@ -95,7 +89,6 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
 
   const handleSave = async () => {
     if (generatedData && onSave) {
-      // Pure cleaned data payload parent ko pass karein taake MongoDB me validation error na aaye
       onSave(generatedData);
     }
   };
@@ -137,7 +130,7 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
               placeholder="E.g., Write a comprehensive guide about the impact of machine learning on modern business operations..."
               rows={4}
               className="text-base"
-              disabled={state.isGenerating}
+              disabled={isGenerating} // Fixed from state.isGenerating
             />
             <div className="mt-2 flex justify-between text-sm">
               <span className="text-gray-500">{prompt.length} characters</span>
@@ -157,7 +150,7 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
                   type="button"
                   onClick={() => setPrompt(example)}
                   className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
-                  disabled={state.isGenerating}
+                  disabled={isGenerating} // Fixed from state.isGenerating
                 >
                   {example}
                 </button>
@@ -170,7 +163,7 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-            disabled={state.isGenerating}
+            disabled={isGenerating} // Fixed from state.isGenerating
           >
             <svg className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -197,7 +190,7 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                       }`}
-                      disabled={state.isGenerating}
+                      disabled={isGenerating} // Fixed from state.isGenerating
                     >
                       {t}
                     </button>
@@ -221,7 +214,7 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                       }`}
-                      disabled={state.isGenerating}
+                      disabled={isGenerating} // Fixed from state.isGenerating
                     >
                       {l}
                       <span className="block text-xs opacity-75 font-normal">
@@ -248,7 +241,7 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
                     checked={includeImage}
                     onChange={(e) => setIncludeImage(e.target.checked)}
                     className="sr-only peer"
-                    disabled={state.isGenerating}
+                    disabled={isGenerating} // Fixed from state.isGenerating
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </label>
@@ -261,11 +254,11 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
           <Button
             variant="primary"
             onClick={handleGenerate}
-            disabled={!prompt.trim() || state.isGenerating || prompt.length < 10}
+            disabled={!prompt.trim() || isGenerating || prompt.length < 10} // Fixed from state.isGenerating
             className="flex-1 min-w-[150px]"
-            loading={state.isGenerating}
+            loading={isGenerating} // Fixed from state.isGenerating
           >
-            {state.isGenerating ? 'Generating...' : '🚀 Generate Blog Post'}
+            {isGenerating ? 'Generating...' : '🚀 Generate Blog Post'}
           </Button>
           
           {generatedData && (
@@ -281,7 +274,7 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
           <Button
             variant="outline"
             onClick={handleClear}
-            disabled={state.isGenerating}
+            disabled={isGenerating} // Fixed from state.isGenerating
             className="min-w-[100px]"
           >
             Clear
@@ -290,7 +283,7 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
       </Card>
 
       {/* Progress Indicator */}
-      {state.isGenerating && (
+      {isGenerating && ( // Fixed from state.isGenerating
         <Card>
           <CardContent className="pt-6">
             <div className="space-y-3">
@@ -316,7 +309,7 @@ export default function GenerateForm({ onGenerated, onSave, initialPrompt = '' }
       )}
 
       {/* Generated Content Preview */}
-      {generatedData && !state.isGenerating && (
+      {generatedData && !isGenerating && ( // Fixed from state.isGenerating
         <Card variant="gradient">
           <CardHeader>
             <CardTitle className="text-lg">📄 Generated Content</CardTitle>
