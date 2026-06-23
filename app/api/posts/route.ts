@@ -24,17 +24,18 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search");
     const authorParam = searchParams.get("author");
 
+    // 🎯 Step 1: Base query object setup
     const query: any = {};
     
-    // 🔑 Securely fetch tokens from cookies (if available in context)
+    // 🔑 Step 2: Session Check layers via cookies
     const { accessToken, refreshToken } = await getAuthTokens();
-    
     let user: any = null;
+    
     if (accessToken) {
       try {
         user = await verifyToken(accessToken);
       } catch (e) {
-        console.log("Access token expired or invalid, attempting refresh fallback...");
+        console.log("Access token validation expired/failed, trying refresh fallback...");
       }
     } 
     
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
       }
     }
     
-    // 🎯 DYNAMIC MULTI-TENANT ISOLATION LAYER
+    // 🎯 Step 3: BULLETPROOF TENANT ISOLATION LAYER
     if (authorParam) {
       // 🚀 PRIORITY 1: Frontend dashboard ne explicitly apnay logged-in user ki ID bheji hai.
       // Direct database query ko is identity par lock kar do taake data leakage bypass ho sakay.
@@ -59,21 +60,19 @@ export async function GET(req: NextRequest) {
       if (status) {
         query.status = status;
       }
-    } else if (!user) {
-      // 🌍 PRIORITY 2: Pure Guest User (Na session token hai na explicit author request)
-      // Sirf pure public/published feeds show honi chahiye
-      query.status = "published";
-    } else {
-      // 🔒 PRIORITY 3: Token fallback validation check
+    } else if (user) {
+      // 🔒 PRIORITY 2: Token fallback validation check agar parameter miss ho jaye
       const loggedInUserId = user.userId || user.id || user._id;
       if (loggedInUserId) {
         query.author = new mongoose.Types.ObjectId(loggedInUserId);
-        if (status) {
-          query.status = status;
-        }
+        if (status) query.status = status;
       } else {
-        query.status = "published";
+        query.status = "published"; // Fallback security layer
       }
+    } else {
+      // 🌍 PRIORITY 3: Pure Guest User (Na session token hai na explicit author request)
+      // Sirf pure public/published feeds show honi chahiye
+      query.status = "published";
     }
 
     // Extra global query filters (Search, Tags, Categories)

@@ -41,7 +41,14 @@ export const usePosts = create<PostsStore>((set, get) => ({
     set({ isLoading: true, error: null });
     
     try {
-      const response = await postService.getPosts(filters);
+      // 🎯 DYNAMIC OVERRIDE: Agar filters directly pass ho rahe hain, to unhe service layer tak safe bhejein
+      // Agar aapka postService internal axios ya fetch query build nahi kar raha, to hum yahan fallback timestamp bhi attach kar dete hain.
+      const safeFilters = {
+        ...filters,
+        _t: Date.now() // Cache busting toggle taake Vercel aggressive caching discard kare
+      };
+
+      const response = await postService.getPosts(safeFilters);
       
       if (response.success) {
         set({
