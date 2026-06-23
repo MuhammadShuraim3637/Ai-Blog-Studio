@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Invalid token" }, { status: 401 });
     }
 
-    const authorId = user?.userId || user?.id || user?._id;
+    const authorId = user?.userId;
     if (!authorId) {
       return NextResponse.json({ success: false, error: "Author ID missing" }, { status: 400 });
     }
