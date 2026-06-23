@@ -4,7 +4,7 @@ import { connectDB } from "@/lib/db";
 import Post from "@/models/Post";
 import { verifyToken, verifyRefreshToken } from "@/lib/auth";
 import { getAuthTokens } from "@/lib/cookies";
-import mongoose from "mongoose"; // 🔑 Mongoose explicit import for casting type validation
+import mongoose from "mongoose"; // 🔑 Mongoose type cast import
 
 export const dynamic = 'force-dynamic';
 
@@ -40,8 +40,19 @@ export async function GET(req: NextRequest) {
       }
     }
     
+    // 🎯 STRICT PRIVACY & LEAK ISOLATION
     if (!user) {
-      // 1. Guest User: Sirf publicly published posts nazar aayengi
+      // Security Layer: Agar user login nahi hai aur request dashboard se aa rahi hai (limit=5)
+      // to data leak block karne ke liye empty array bhej do.
+      if (limit === 5 || req.headers.get("referer")?.includes("/dashboard")) {
+        return NextResponse.json({
+          success: true,
+          data: [],
+          pagination: { page, limit, total: 0, pages: 0 },
+        });
+      }
+      
+      // Normal guest user ke liye standard query
       query.status = "published";
       if (authorParam) {
         try {
@@ -51,12 +62,11 @@ export async function GET(req: NextRequest) {
         }
       }
     } else {
-      // 2. Logged-in User: Strict isolation logic enforce karein
+      // ✅ Logged-in User: Isolate data so they ONLY see their own posts on dashboard
       const loggedInUserId = user.userId || user.id || user._id;
       
       if (loggedInUserId) {
-        // 🔑 THE ABSOLUTE CRITICAL FIX: String ID ko explicitly Mongoose ObjectId mein convert kiya
-        // Taake MongoDB schema structure ke mutabiq exact document link match ho ske.
+        // Strict explicit ObjectId casting for MongoDB layer accuracy
         query.author = new mongoose.Types.ObjectId(loggedInUserId);
       }
       
@@ -114,7 +124,7 @@ export async function POST(req: NextRequest) {
     console.log("=== [1] POST API HIT STARTED ===");
     await connectDB();
     
-    // Yahan hum strict cookie extraction process follow kar rahe hain
+    // Strict token check matching your exact workflow
     const { accessToken } = await getAuthTokens();
     if (!accessToken) {
       return NextResponse.json(
