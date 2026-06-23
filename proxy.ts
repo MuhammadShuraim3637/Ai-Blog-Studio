@@ -23,6 +23,11 @@ export default async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow public GET requests to posts API (for fetching published posts)
+  if (pathname === '/api/posts' && request.method === 'GET') {
+    return NextResponse.next();
+  }
+
   const token = request.cookies.get(COOKIE_NAME)?.value;
 
   // 2. Check karein ke current path public route hai ya nahi

@@ -41,21 +41,16 @@ export async function GET(req: NextRequest) {
     
     // Strict multi-tenant structure
     if (authorParam && authorParam !== "undefined" && authorParam !== "null") {
+      // Fetch specific author's posts
       try { 
         query.author = new mongoose.Types.ObjectId(authorParam); 
       } catch (e) { 
         query.author = authorParam; 
       }
-      if (status) query.status = status;
-    } else if (user) {
-      const loggedInUserId = user.userId || user.id || user._id;
-      if (loggedInUserId) {
-        query.author = new mongoose.Types.ObjectId(loggedInUserId);
-        if (status) query.status = status;
-      } else {
-        query.status = "published";
-      }
+      // For specific author, only show published posts unless status is explicitly specified
+      query.status = status || "published";
     } else {
+      // For all other cases (logged-in users or anonymous), show only published posts
       query.status = "published";
     }
 
