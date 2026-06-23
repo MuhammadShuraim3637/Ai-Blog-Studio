@@ -12,6 +12,9 @@ class PostService {
     try {
       const queryParams = new URLSearchParams();
       
+      // 🔑 FORCE CACHE BUSTING: Hamesha unique timestamp bhein taake Next.js RSC router cache bypass ho sake
+      queryParams.append('_t', Date.now().toString());
+
       if (filters) {
         Object.entries(filters).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== '') {
@@ -20,7 +23,9 @@ class PostService {
         });
       }
       
-      const url = `${this.baseUrl}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const url = `${this.baseUrl}?${queryParams.toString()}`;
+      
+      // ApiClient configuration default dynamic fetch rules bypass layer
       const response = await apiClient.get<IPostsResponse>(url);
       return response;
     } catch (error: any) {
@@ -43,7 +48,8 @@ class PostService {
    */
   async getPost(identifier: string): Promise<IPostResponse> {
     try {
-      const response = await apiClient.get<IPostResponse>(`${this.baseUrl}/${identifier}`);
+      // Single item view par bhi timestamp pass kar rahay hain fresh fetch k liye
+      const response = await apiClient.get<IPostResponse>(`${this.baseUrl}/${identifier}?_t=${Date.now()}`);
       return response;
     } catch (error: any) {
       return {
@@ -216,7 +222,7 @@ class PostService {
   async getRelatedPosts(postId: string, tags: string[], limit: number = 5): Promise<IPostsResponse> {
     try {
       const response = await apiClient.get<IPostsResponse>(`${this.baseUrl}/${postId}/related`, {
-        params: { tags: tags.join(','), limit },
+        params: { tags: tags.join(','), limit, _t: Date.now() },
       });
       return response;
     } catch (error: any) {
