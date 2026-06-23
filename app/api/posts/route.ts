@@ -4,11 +4,11 @@ import { connectDB } from "@/lib/db";
 import Post from "@/models/Post";
 import { verifyToken, verifyRefreshToken } from "@/lib/auth";
 import { getAuthTokens } from "@/lib/cookies";
-import mongoose from "mongoose"; // 🔑 Mongoose type cast import
+import mongoose from "mongoose";
 
 export const dynamic = 'force-dynamic';
 
-// GET - Fetch posts (Private for logged-in user dashboard, Public for home feed)
+// GET - Fetch posts (Public published posts for everyone, plus owned drafts for logged-in user)
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       user = await verifyToken(accessToken);
     } 
     
-    // Fallback: Agar access token expire ho chuka ho, to refresh token validation check karein
+    // Fallback: Agar access token expire ho chuka ho
     if (!user && refreshToken) {
       const refreshPayload = await verifyRefreshToken(refreshToken);
       if (refreshPayload) {
@@ -40,44 +40,48 @@ export async function GET(req: NextRequest) {
       }
     }
     
-    // 🎯 STRICT PRIVACY & LEAK ISOLATION
     if (!user) {
-      // Security Layer: Agar user login nahi hai aur request dashboard se aa rahi hai (limit=5)
-      // to data leak block karne ke liye empty array bhej do.
-      if (limit === 5 || req.headers.get("referer")?.includes("/dashboard")) {
-        return NextResponse.json({
-          success: true,
-          data: [],
-          pagination: { page, limit, total: 0, pages: 0 },
-        });
-      }
-      
-      // Normal guest user ke liye standard query
+      // 1. Agar koi user login nahi hai -> Sirf publicly published posts dikhao
       query.status = "published";
+      
       if (authorParam) {
-        try {
-          query.author = new mongoose.Types.ObjectId(authorParam);
-        } catch (e) {
-          query.author = authorParam;
-        }
+        try { query.author = new mongoose.Types.ObjectId(authorParam); } catch (e) { query.author = authorParam; }
       }
     } else {
-      // ✅ Logged-in User: Isolate data so they ONLY see their own posts on dashboard
+      // 2. 🎯 THE REAL FIX: Logged-in User Logic
       const loggedInUserId = user.userId || user.id || user._id;
       
       if (loggedInUserId) {
-        // Strict explicit ObjectId casting for MongoDB layer accuracy
-        query.author = new mongoose.Types.ObjectId(loggedInUserId);
-      }
-      
-      if (status) {
-        query.status = status;
+        const userObjectId = new mongoose.Types.ObjectId(loggedInUserId);
+        
+        // Logic: Saari published posts dikhao (kisi ki bhi hon) OR logged-in user ki apni posts dikhao (chahe draft hon)
+        query.$or = [
+          { status: "published" },
+          { author: userObjectId }
+        ];
+        
+        // Agar frontend se dashboard par explicitly status filter lagaya ho (like draft)
+        if (status) {
+          // Agar usne specific filter manga hai, to usey filter out karo standard query se
+          query.status = status;
+          // Security filter: Agar wo draft dekh raha hai, to sirf uski apni hi honi chahiye!
+          if (status !== "published") {
+            query.author = userObjectId;
+            delete query.$or; // Overwrite $or condition for strict self-draft view
+          }
+        }
+      } else {
+        // Fallback agar token de-serialize sahi na hoa ho
+        query.status = "published";
       }
     }
 
-    // Common global URL parameters filtering
+    // URL Query Filters Override (Agar search params pass kiye gaye hon)
     if (category) query.categories = category;
     if (tag) query.tags = tag;
+    if (authorParam && !query.author) {
+      try { query.author = new mongoose.Types.ObjectId(authorParam); } catch (e) { query.author = authorParam; }
+    }
     
     if (search) {
       query.$or = [
@@ -124,7 +128,6 @@ export async function POST(req: NextRequest) {
     console.log("=== [1] POST API HIT STARTED ===");
     await connectDB();
     
-    // Strict token check matching your exact workflow
     const { accessToken } = await getAuthTokens();
     if (!accessToken) {
       return NextResponse.json(
@@ -136,9 +139,7 @@ export async function POST(req: NextRequest) {
     let user: any = null;
     try {
       user = await verifyToken(accessToken);
-      console.log("=== [4] DECODED USER OBJECT ==:", user);
     } catch (tokenErr: any) {
-      console.error("=== Token Verification Failed ==:", tokenErr);
       return NextResponse.json(
         { success: false, error: `JWT Verify Error: ${tokenErr.message}` },
         { status: 401 }
@@ -155,26 +156,18 @@ export async function POST(req: NextRequest) {
     const authorId = user.userId || user.id || user._id;
     if (!authorId) {
       return NextResponse.json(
-        { success: false, error: `Context Error: Author ID keys are missing in decoded token.` },
+        { success: false, error: `Context Error: Author ID keys are missing.` },
         { status: 400 }
       );
     }
 
     let body: any = null;
-    try {
-      body = await req.json();
-    } catch (jsonErr: any) {
-      return NextResponse.json(
-        { success: false, error: "Payload Error: Invalid JSON body received" },
-        { status: 400 }
-      );
+    try { body = await req.json(); } catch (jsonErr: any) {
+      return NextResponse.json({ success: false, error: "Payload Error: Invalid JSON" }, { status: 400 });
     }
 
     if (!body.title || !body.content || !body.slug) {
-      return NextResponse.json(
-        { success: false, error: "Validation Error: Title, Content, and Slug check failed" },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: "Validation Error" }, { status: 400 });
     }
 
     const cleanAiGeneratedFlag = body.aiGenerated === true || !!body.aiPrompt || !!body.aiModel;
@@ -203,18 +196,10 @@ export async function POST(req: NextRequest) {
       }, { status: 201 });
 
     } catch (dbErr: any) {
-      console.error("❌ SCHEMA VALIDATION ERROR:", dbErr);
-      return NextResponse.json(
-        { success: false, error: `Mongoose Schema Error: ${dbErr.message}` },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: dbErr.message }, { status: 400 });
     }
 
   } catch (error: any) {
-    console.error("❌ GLOBAL EXCEPTION:", error);
-    return NextResponse.json(
-      { success: false, error: `Global Exception Catch: ${error.message}` },
-      { status: 400 }
-    );
+    return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
