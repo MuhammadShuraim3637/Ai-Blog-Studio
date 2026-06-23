@@ -6,11 +6,10 @@ import { verifyToken, verifyRefreshToken } from "@/lib/auth";
 import { getAuthTokens } from "@/lib/cookies";
 import mongoose from "mongoose";
 
-// 🔥 Next.js ko majboor karein ke is route ko kabhi cache na kare
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// GET - Fetch posts (Strictly isolated via client pass-through or dynamic cookies)
+// GET - Fetch posts
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
@@ -24,58 +23,42 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search");
     const authorParam = searchParams.get("author");
 
-    // 🎯 Step 1: Base query object setup
     const query: any = {};
     
-    // 🔑 Step 2: Session Check layers via cookies
-    const { accessToken, refreshToken } = await getAuthTokens();
+    // Auth fallback
     let user: any = null;
-    
-    if (accessToken) {
-      try {
-        user = await verifyToken(accessToken);
-      } catch (e) {
-        console.log("Access token validation expired/failed, trying refresh fallback...");
+    try {
+      const tokens = await getAuthTokens();
+      if (tokens && tokens.accessToken) {
+        user = await verifyToken(tokens.accessToken);
       }
-    } 
-    
-    if (!user && refreshToken) {
-      const refreshPayload = await verifyRefreshToken(refreshToken);
-      if (refreshPayload) {
-        user = refreshPayload;
+      if (!user && tokens && tokens.refreshToken) {
+        user = await verifyRefreshToken(tokens.refreshToken);
       }
+    } catch (authErr) {
+      console.log("Auth token parsing ignored for isolation logic");
     }
     
-    // 🎯 Step 3: BULLETPROOF TENANT ISOLATION LAYER
-    if (authorParam) {
-      // 🚀 PRIORITY 1: Frontend dashboard ne explicitly apnay logged-in user ki ID bheji hai.
-      // Direct database query ko is identity par lock kar do taake data leakage bypass ho sakay.
+    // Strict multi-tenant structure
+    if (authorParam && authorParam !== "undefined" && authorParam !== "null") {
       try { 
         query.author = new mongoose.Types.ObjectId(authorParam); 
       } catch (e) { 
         query.author = authorParam; 
       }
-      
-      // Dashboard views ke liye status validation checks
-      if (status) {
-        query.status = status;
-      }
+      if (status) query.status = status;
     } else if (user) {
-      // 🔒 PRIORITY 2: Token fallback validation check agar parameter miss ho jaye
       const loggedInUserId = user.userId || user.id || user._id;
       if (loggedInUserId) {
         query.author = new mongoose.Types.ObjectId(loggedInUserId);
         if (status) query.status = status;
       } else {
-        query.status = "published"; // Fallback security layer
+        query.status = "published";
       }
     } else {
-      // 🌍 PRIORITY 3: Pure Guest User (Na session token hai na explicit author request)
-      // Sirf pure public/published feeds show honi chahiye
       query.status = "published";
     }
 
-    // Extra global query filters (Search, Tags, Categories)
     if (category) query.categories = category;
     if (tag) query.tags = tag;
     
@@ -99,111 +82,76 @@ export async function GET(req: NextRequest) {
       Post.countDocuments(query),
     ]);
 
-    // 🔑 Response headers mein cache prevention set karein taake Next.js old snapshot na render kare
     const response = NextResponse.json({
       success: true,
       data: posts,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     });
 
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    response.headers.set('Pragma', 'no-cache');
-    response.headers.set('Expires', '0');
-    
     return response;
 
   } catch (error: any) {
-    console.error("Get posts error:", error);
+    console.error("CRITICAL GET POSTS ERROR:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch posts" },
+      { success: false, error: error.message || "Failed to fetch posts" },
       { status: 500 }
     );
   }
 }
 
-// POST - Create new post (authenticated)
+// POST - Create new post
 export async function POST(req: NextRequest) {
   try {
-    console.log("=== [1] POST API HIT STARTED ===");
     await connectDB();
     
     const { accessToken } = await getAuthTokens();
     if (!accessToken) {
-      return NextResponse.json(
-        { success: false, error: "Auth Error: No access token found in cookies" },
-        { status: 401 }
-      );
+      return NextResponse.json({ success: false, error: "No token found" }, { status: 401 });
     }
 
     let user: any = null;
     try {
       user = await verifyToken(accessToken);
-    } catch (tokenErr: any) {
-      return NextResponse.json(
-        { success: false, error: `JWT Verify Error: ${tokenErr.message}` },
-        { status: 401 }
-      );
+    } catch (err) {
+      return NextResponse.json({ success: false, error: "Invalid token" }, { status: 401 });
     }
 
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "Auth Error: Token verification returned null" },
-        { status: 401 }
-      );
-    }
-
-    const authorId = user.userId || user.id || user._id;
+    const authorId = user?.userId || user?.id || user?._id;
     if (!authorId) {
-      return NextResponse.json(
-        { success: false, error: `Context Error: Author ID keys are missing.` },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, error: "Author ID missing" }, { status: 400 });
     }
 
     let body: any = null;
-    try { body = await req.json(); } catch (jsonErr: any) {
-      return NextResponse.json({ success: false, error: "Payload Error: Invalid JSON" }, { status: 400 });
+    try { body = await req.json(); } catch (e) {
+      return NextResponse.json({ success: false, error: "Invalid JSON body" }, { status: 400 });
     }
 
     if (!body.title || !body.content || !body.slug) {
-      return NextResponse.json({ success: false, error: "Validation Error" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
     }
 
     const cleanAiGeneratedFlag = body.aiGenerated === true || !!body.aiPrompt || !!body.aiModel;
 
-    try {
-      const post = await Post.create({
-        title: body.title,
-        slug: body.slug,
-        content: body.content,
-        excerpt: body.excerpt,
-        status: body.status || "published",
-        tags: body.tags || [],
-        categories: body.categories || [],
-        aiGenerated: cleanAiGeneratedFlag,
-        aiPrompt: body.aiPrompt || undefined,
-        aiModel: body.aiModel || undefined,
-        aiSettings: body.aiSettings || undefined,
-        author: authorId,
-      });
+    const post = await Post.create({
+      title: body.title,
+      slug: body.slug,
+      content: body.content,
+      excerpt: body.excerpt,
+      status: body.status || "published",
+      tags: body.tags || [],
+      categories: body.categories || [],
+      aiGenerated: cleanAiGeneratedFlag,
+      aiPrompt: body.aiPrompt || undefined,
+      aiModel: body.aiModel || undefined,
+      aiSettings: body.aiSettings || undefined,
+      author: authorId,
+    });
 
-      console.log("=== [7] MONGOOSE SUCCESS ===");
-      return NextResponse.json({
-        success: true,
-        data: post,
-        message: "Post created successfully",
-      }, { status: 201 });
-
-    } catch (dbErr: any) {
-      return NextResponse.json({ success: false, error: dbErr.message }, { status: 400 });
-    }
+    return NextResponse.json({ success: true, data: post, message: "Post created successfully" }, { status: 201 });
 
   } catch (error: any) {
+    console.error("CRITICAL POST CREATION ERROR:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 400 });
   }
 }
