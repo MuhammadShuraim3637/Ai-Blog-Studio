@@ -8,7 +8,7 @@ import mongoose from "mongoose";
 
 export const dynamic = 'force-dynamic';
 
-// GET - Fetch posts (Public published posts for everyone, plus owned drafts for logged-in user)
+// GET - Fetch posts (Isolated Dashboard or Guest Public Feed)
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     const query: any = {};
     
-    // 🔑 Securely fetch access and refresh tokens from system cookies
+    // 🔑 Cookies se tokens nikalwayein
     const { accessToken, refreshToken } = await getAuthTokens();
     
     let user: any = null;
@@ -32,7 +32,6 @@ export async function GET(req: NextRequest) {
       user = await verifyToken(accessToken);
     } 
     
-    // Fallback: Agar access token expire ho chuka ho
     if (!user && refreshToken) {
       const refreshPayload = await verifyRefreshToken(refreshToken);
       if (refreshPayload) {
@@ -40,48 +39,33 @@ export async function GET(req: NextRequest) {
       }
     }
     
+    // 🎯 FIX: STATED MULTI-TENANT ISOLATION
     if (!user) {
-      // 1. Agar koi user login nahi hai -> Sirf publicly published posts dikhao
+      // 1. Guest User: Sirf pure public posts dikhao
       query.status = "published";
-      
       if (authorParam) {
         try { query.author = new mongoose.Types.ObjectId(authorParam); } catch (e) { query.author = authorParam; }
       }
     } else {
-      // 2. 🎯 THE REAL FIX: Logged-in User Logic
+      // 2. Logged-in User (Dashboard Scene):
       const loggedInUserId = user.userId || user.id || user._id;
       
       if (loggedInUserId) {
-        const userObjectId = new mongoose.Types.ObjectId(loggedInUserId);
+        // 🔒 DIRECT LOCK: Dashboard par sirf aur sirf is user ka apna data aana chahiye!
+        query.author = new mongoose.Types.ObjectId(loggedInUserId);
         
-        // Logic: Saari published posts dikhao (kisi ki bhi hon) OR logged-in user ki apni posts dikhao (chahe draft hon)
-        query.$or = [
-          { status: "published" },
-          { author: userObjectId }
-        ];
-        
-        // Agar frontend se dashboard par explicitly status filter lagaya ho (like draft)
+        // Agar frontend se status manga ho (like published ya draft) to filter apply karo
         if (status) {
-          // Agar usne specific filter manga hai, to usey filter out karo standard query se
           query.status = status;
-          // Security filter: Agar wo draft dekh raha hai, to sirf uski apni hi honi chahiye!
-          if (status !== "published") {
-            query.author = userObjectId;
-            delete query.$or; // Overwrite $or condition for strict self-draft view
-          }
         }
       } else {
-        // Fallback agar token de-serialize sahi na hoa ho
         query.status = "published";
       }
     }
 
-    // URL Query Filters Override (Agar search params pass kiye gaye hon)
+    // Baqi extra URL parameter filters
     if (category) query.categories = category;
     if (tag) query.tags = tag;
-    if (authorParam && !query.author) {
-      try { query.author = new mongoose.Types.ObjectId(authorParam); } catch (e) { query.author = authorParam; }
-    }
     
     if (search) {
       query.$or = [
