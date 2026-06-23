@@ -17,14 +17,10 @@ export default function DashboardPage() {
     draftPosts: 0,
   });
 
-  // 🎯 FIX 1: Jab tak logged-in user ki ID na milay, tab tak request mat bhejo. 
-  // Explicitly author ID pass karein taake backend bypass na ho sake.
+  // 🎯 Fetch all published posts (from everyone, not just user's own)
   useEffect(() => {
-    const userId = user?._id;
-    if (userId) {
-      fetchPosts({ author: userId, limit: 5 });
-    }
-  }, [user]);
+    fetchPosts({ limit: 5 });
+  }, [fetchPosts]);
 
   useEffect(() => {
     if (posts.length > 0) {
