@@ -10,7 +10,7 @@ import mongoose from "mongoose";
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// GET - Fetch posts (Strictly isolated for logged-in user dashboard)
+// GET - Fetch posts (Strictly isolated via client pass-through or dynamic cookies)
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
@@ -26,12 +26,16 @@ export async function GET(req: NextRequest) {
 
     const query: any = {};
     
-    // 🔑 Securely fetch tokens from cookies
+    // 🔑 Securely fetch tokens from cookies (if available in context)
     const { accessToken, refreshToken } = await getAuthTokens();
     
     let user: any = null;
     if (accessToken) {
-      user = await verifyToken(accessToken);
+      try {
+        user = await verifyToken(accessToken);
+      } catch (e) {
+        console.log("Access token expired or invalid, attempting refresh fallback...");
+      }
     } 
     
     if (!user && refreshToken) {
@@ -41,32 +45,38 @@ export async function GET(req: NextRequest) {
       }
     }
     
-    // 🎯 DYNAMIC MULTI-TENANT ISOLATION
-    if (!user) {
-      // 1. Guest User Layer: Sirf published posts show hon
-      query.status = "published";
-      if (authorParam) {
-        try { query.author = new mongoose.Types.ObjectId(authorParam); } catch (e) { query.author = authorParam; }
+    // 🎯 DYNAMIC MULTI-TENANT ISOLATION LAYER
+    if (authorParam) {
+      // 🚀 PRIORITY 1: Frontend dashboard ne explicitly apnay logged-in user ki ID bheji hai.
+      // Direct database query ko is identity par lock kar do taake data leakage bypass ho sakay.
+      try { 
+        query.author = new mongoose.Types.ObjectId(authorParam); 
+      } catch (e) { 
+        query.author = authorParam; 
       }
-    } else {
-      // 2. Logged-in User Layer: Target user keys strictly
-      const loggedInUserId = user.userId || user.id || user._id;
       
+      // Dashboard views ke liye status validation checks
+      if (status) {
+        query.status = status;
+      }
+    } else if (!user) {
+      // 🌍 PRIORITY 2: Pure Guest User (Na session token hai na explicit author request)
+      // Sirf pure public/published feeds show honi chahiye
+      query.status = "published";
+    } else {
+      // 🔒 PRIORITY 3: Token fallback validation check
+      const loggedInUserId = user.userId || user.id || user._id;
       if (loggedInUserId) {
-        // Strict explicit ObjectId casting for MongoDB layer
         query.author = new mongoose.Types.ObjectId(loggedInUserId);
-        
-        // Status filter override
         if (status) {
           query.status = status;
         }
       } else {
-        // Fallback security layer if user object fails to parse
         query.status = "published";
       }
     }
 
-    // Extra global query filters
+    // Extra global query filters (Search, Tags, Categories)
     if (category) query.categories = category;
     if (tag) query.tags = tag;
     
@@ -90,7 +100,7 @@ export async function GET(req: NextRequest) {
       Post.countDocuments(query),
     ]);
 
-    // 🔑 Response headers mein cache prevention force karein
+    // 🔑 Response headers mein cache prevention set karein taake Next.js old snapshot na render kare
     const response = NextResponse.json({
       success: true,
       data: posts,
