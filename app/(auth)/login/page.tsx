@@ -231,13 +231,6 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
-
-        {/* Demo Credentials */}
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-          <p className="text-xs text-slate-500 font-medium text-center tracking-wide">
-            💡 DEMO ACCESS: <span className="font-bold text-slate-700">demo@example.com</span> / <span className="font-bold text-slate-700">demo123</span>
-          </p>
-        </div>
       </div>
     </div>
   );
